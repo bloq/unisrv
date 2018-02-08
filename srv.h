@@ -12,38 +12,6 @@
 
 #define DEFAULT_DATASTORE_FN "srv.rocks"
 
-struct HttpApiEntry {
-	bool			authReq;	// authentication req'd?
-
-	const char		*path;
-	bool			pathIsRegex;
-
-	evhtp_callback_cb	cb;
-	bool			wantInput;
-	bool			jsonInput;
-};
-
-class ReqState {
-public:
-	std::string		body;
-	SHA256_CTX		bodyHash;
-	std::vector<unsigned char> md;
-
-	std::string		path;
-	struct timeval		tstamp;
-
-	UniValue		jval;
-
-	const struct HttpApiEntry *apiEnt;
-
-	ReqState() : md(SHA256_DIGEST_LENGTH) {
-		SHA256_Init(&bodyHash);
-		gettimeofday(&tstamp, NULL);
-	}
-};
-
-bool reqPreProcessing(evhtp_request_t *req, ReqState *state);
-
 namespace Unisrv {
 
 class View {
@@ -72,6 +40,7 @@ public:
 	virtual void close() = 0;
 	virtual bool get(const std::string& key, std::string *val) = 0;
 	virtual bool put(const std::string& key, const std::string& val) = 0;
+	virtual bool del(const std::string& key) = 0;
 };
 
 class RocksView : public View {
@@ -118,8 +87,59 @@ public:
 			db->Put(rocksdb::WriteOptions(), key, val);
 		return retstat(status);
 	}
+
+	bool del(const std::string& key) {
+		rocksdb::Status status =
+			db->Delete(rocksdb::WriteOptions(), key);
+		return retstat(status);
+	}
 };
 
-}
+class Endpoint {
+public:
+	std::string	name;
+	std::string	urlpath;
+	std::string	protocol;
+	View		*view;
+
+	bool		authReq;
+	bool		wantInput;
+};
+
+} // namespace Unisrv
+
+struct HttpApiEntry {
+	bool			authReq;	// authentication req'd?
+
+	const char		*path;
+	bool			pathIsRegex;
+
+	evhtp_callback_cb	cb;
+	bool			wantInput;
+	bool			jsonInput;
+};
+
+class ReqState {
+public:
+	std::string		body;
+	SHA256_CTX		bodyHash;
+	std::vector<unsigned char> md;
+
+	std::string		path;
+	struct timeval		tstamp;
+
+	UniValue		jval;
+
+	Unisrv::Endpoint	*endpt;
+	struct HttpApiEntry	apiEnt_;
+	const struct HttpApiEntry *apiEnt;
+
+	ReqState() : md(SHA256_DIGEST_LENGTH) {
+		SHA256_Init(&bodyHash);
+		gettimeofday(&tstamp, NULL);
+	}
+};
+
+bool reqPreProcessing(evhtp_request_t *req, ReqState *state);
 
 #endif // __SRV_H__

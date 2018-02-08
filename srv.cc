@@ -64,6 +64,7 @@ static UniValue serverCfg;
 static evbase_t *evbase = NULL;
 
 static map<std::string,Unisrv::View*> dbViews;
+static map<std::string,Unisrv::Endpoint> srvEndpoints;
 
 static Unisrv::View *getView(const std::string& name,
 			     const std::string& driver_,
@@ -164,11 +165,19 @@ req_finish_cb(evhtp_request_t * req, void * arg)
 }
 
 static void reqInit(evhtp_request_t *req, ReqState *state,
-		    const struct HttpApiEntry *apiEnt)
+		    Unisrv::Endpoint *endpt)
 {
-	assert(req && state && apiEnt);
+	assert(req && state && endpt);
 
-	state->apiEnt = apiEnt;
+	state->endpt = endpt;
+	state->apiEnt = &state->apiEnt_;
+
+	state->apiEnt_.authReq = endpt->authReq;
+	state->apiEnt_.cb = nullptr;
+	state->apiEnt_.path = endpt->urlpath.c_str();
+	state->apiEnt_.wantInput = endpt->wantInput;
+	if (endpt->protocol == "jsonrpc")
+		state->apiEnt_.jsonInput = true;
 
 	// standard Date header
 	evhtp_headers_add_header(req->headers_out,
@@ -188,12 +197,12 @@ static void reqInit(evhtp_request_t *req, ReqState *state,
 	evhtp_request_set_hook (req, evhtp_hook_on_request_fini, (evhtp_hook) req_finish_cb, state);
 }
 
-static bool reqVerify(evhtp_request_t *req, ReqState *state,
+static bool reqVerify(evhtp_request_t *req,
 		      const struct HttpApiEntry *apiEnt,
 		      const std::string& authUser,
 		      const std::string& authSecret)
 {
-	assert(req && state && apiEnt);
+	assert(req && apiEnt);
 
 	if (!apiEnt->authReq)
 		return true;
@@ -219,7 +228,7 @@ bool reqPreProcessing(evhtp_request_t *req, ReqState *state)
 	const struct HttpApiEntry *apiEnt = state->apiEnt;
 
 	// check authorization, if method requires it
-	if (!reqVerify(req, state, apiEnt,
+	if (!reqVerify(req, apiEnt,
 		       "testuser", "testpass")) {
 		evhtp_send_reply(req, EVHTP_RES_FORBIDDEN);
 		return false;
@@ -243,7 +252,7 @@ upload_headers_cb(evhtp_request_t * req, evhtp_headers_t * hdrs, void *arg)
 {
 	assert(req && hdrs && arg);
 
-	const struct HttpApiEntry *apiEnt = (const struct HttpApiEntry *) arg;
+	Unisrv::Endpoint *endpt = (Unisrv::Endpoint *) arg;
 
 	// handle OPTIONS
 	if (evhtp_request_get_method(req) == htp_method_OPTIONS) {
@@ -255,7 +264,7 @@ upload_headers_cb(evhtp_request_t * req, evhtp_headers_t * hdrs, void *arg)
 	assert(state != NULL);
 
 	// common per-request state
-	reqInit(req, state, apiEnt);
+	reqInit(req, state, endpt);
 
 	// special incoming-data hook
 	evhtp_request_set_hook (req, evhtp_hook_on_read, (evhtp_hook) upload_read_cb, state);
@@ -268,7 +277,7 @@ no_upload_headers_cb(evhtp_request_t * req, evhtp_headers_t * hdrs, void *arg)
 {
 	assert(req && hdrs && arg);
 
-	const struct HttpApiEntry *apiEnt = (const struct HttpApiEntry *) arg;
+	Unisrv::Endpoint *endpt = (Unisrv::Endpoint *) arg;
 
 	// handle OPTIONS
 	if (evhtp_request_get_method(req) == htp_method_OPTIONS) {
@@ -280,35 +289,9 @@ no_upload_headers_cb(evhtp_request_t * req, evhtp_headers_t * hdrs, void *arg)
 	assert(state != NULL);
 
 	// common per-request state
-	reqInit(req, state, apiEnt);
+	reqInit(req, state, endpt);
 
 	return EVHTP_RES_OK;
-}
-
-void reqInfo(evhtp_request_t * req, void * arg)
-{
-	assert(req && arg);
-	ReqState *state = (ReqState *) arg;
-
-	// global pre-request processing
-	if (!reqPreProcessing(req, state))
-		return;		// pre-processing failed; response already sent
-
-	// current service time
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	UniValue timeObj(UniValue::VOBJ);
-	timeObj.pushKV("unixtime", tv.tv_sec);
-	timeObj.pushKV("iso", isoTimeStr(tv.tv_sec));
-
-	// some information about this server
-	UniValue obj(UniValue::VOBJ);
-	obj.pushKV("name", "srv");
-	obj.pushKV("apiversion", 100);
-	obj.pushKV("time", timeObj);
-
-	// successful operation.  Return JSON output.
-	httpJsonReply(req, obj);
 }
 
 bool validJsonRpc(const UniValue& val)
@@ -376,28 +359,92 @@ void rpcReplyErr(evhtp_request_t * req, const UniValue& jreq,
 	rpcReply(req, jreq, obj);
 }
 
-void reqRoot(evhtp_request_t * req, void * arg)
+void jrpc_get(evhtp_request_t *req, const UniValue& jreq,
+	      Unisrv::Endpoint *endpt)
 {
-	assert(req && arg);
-	ReqState *state = (ReqState *) arg;
+	const string& key = jreq["params"][0].getValStr();
+	if (key.empty()) {
+		rpcReplyErr(req, jreq, -32602, "Invalid params: first param missing/not a string");
+		return;
+	}
 
-	// global pre-request processing
-	if (!reqPreProcessing(req, state))
-		return;		// pre-processing failed; response already sent
+	string value;
+	bool rc = endpt->view->get(key, &value);
+	if (!rc)
+		rpcReplyErr(req, jreq, -1, "Key not found");
+	else
+		rpcReplyOk(req, jreq, UniValue(value));
+}
 
-	const UniValue& jreq = state->jval;
+void jrpc_put(evhtp_request_t *req, const UniValue& jreq,
+	      Unisrv::Endpoint *endpt)
+{
+	const string& key = jreq["params"][0].getValStr();
+	const string& value = jreq["params"][1].getValStr();
+	if (key.empty()) {
+		rpcReplyErr(req, jreq, -32602, "Invalid params: first param missing/not a string");
+		return;
+	}
+
+	bool rc = endpt->view->put(key, value);
+	if (!rc)
+		rpcReplyErr(req, jreq, -1, "Key/value store failed");
+	else
+		rpcReplyOk(req, jreq, UniValue(true));
+}
+
+void jrpc_del(evhtp_request_t *req, const UniValue& jreq,
+	      Unisrv::Endpoint *endpt)
+{
+	const string& key = jreq["params"][0].getValStr();
+	if (key.empty()) {
+		rpcReplyErr(req, jreq, -32602, "Invalid params: first param missing/not a string");
+		return;
+	}
+
+	bool rc = endpt->view->del(key);
+	if (!rc)
+		rpcReplyErr(req, jreq, -1, "Key delete failed");
+	else
+		rpcReplyOk(req, jreq, UniValue(true));
+}
+
+void http_req_jsonrpc(evhtp_request_t *req, const UniValue& jreq,
+		      Unisrv::Endpoint *endpt)
+{
 	if (!validJsonRpc(jreq)) {
 		evhtp_send_reply(req, EVHTP_RES_BADREQ);
 		return;
 	}
 
 	const string& method = jreq["method"].getValStr();
-	if (method == "getrawtransaction") {
-		rpcReplyOk(req, jreq, UniValue(true));
-	}
+
+	if (method == "get")
+		jrpc_get(req, jreq, endpt);
+	else if (method == "put")
+		jrpc_put(req, jreq, endpt);
+	else if (method == "del")
+		jrpc_del(req, jreq, endpt);
 
 	else {
 		rpcReplyErr(req, jreq, -32601, "Method not found");
+	}
+}
+
+void http_req_cb(evhtp_request_t * req, void * arg)
+{
+	assert(req && arg);
+	ReqState *state = (ReqState *) arg;
+	Unisrv::Endpoint *endpt = state->endpt;
+
+	// global pre-request processing
+	if (!reqPreProcessing(req, state))
+		return;		// pre-processing failed; response already sent
+
+	if (endpt->protocol == "jsonrpc") {
+		http_req_jsonrpc(req, state->jval, endpt);
+	} else {
+		assert(0);	// should never happen
 	}
 }
 
@@ -429,6 +476,53 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 
 	return 0;
 }
+
+static bool init_endpoints()
+{
+	const UniValue& endpointsList = serverCfg["endpoints"];
+	for (unsigned int i = 0; i < endpointsList.size(); i++) {
+		const UniValue& endpointCfg = endpointsList[i];
+
+		Unisrv::Endpoint endpt;
+		endpt.name = endpointCfg["name"].getValStr();
+		endpt.urlpath = endpointCfg["urlpath"].getValStr();
+		endpt.protocol = endpointCfg["protocol"].getValStr();
+		if (endpt.protocol.empty())
+			endpt.protocol = "jsonrpc";
+		const string& viewName = endpointCfg["view"].getValStr();
+		endpt.wantInput = !endpointCfg["readonly"].isTrue();
+		endpt.authReq = endpointCfg["auth"].isTrue();
+
+		if (endpt.name.empty() || endpt.urlpath.empty() ||
+		    viewName.empty()) {
+			fprintf(stderr, "endpoint details missing\n");
+			return false;
+		}
+		if (endpt.urlpath[0] != '/') {
+			fprintf(stderr, "endpoint %s: invalid urlpath\n",
+				endpt.name.c_str());
+			return false;
+		}
+		if (endpt.protocol != "jsonrpc") {
+			fprintf(stderr, "endpoint %s: invalid protocol\n",
+				endpt.name.c_str());
+			return false;
+		}
+		if (dbViews.count(viewName) == 0) {
+			fprintf(stderr, "endpoint %s: unknown view %s\n",
+				endpt.name.c_str(),
+				viewName.c_str());
+			return false;
+		}
+
+		endpt.view = dbViews[viewName];
+
+		srvEndpoints[endpt.name] = endpt;
+	}
+
+	return true;
+}
+
 
 static bool init_db_views()
 {
@@ -489,13 +583,6 @@ static void shutdown_signal(int signo)
 	event_base_loopbreak(evbase);
 }
 
-static std::vector<struct HttpApiEntry> apiRegistry = {
-	// auth? path			regex? cb	input? json-input?
-	{ false, "/info",		false, reqInfo, false, false },
-	{ true, "/",			false, reqRoot, true, true },
-
-};
-
 int main(int argc, char ** argv)
 {
 	// parse command line
@@ -520,29 +607,31 @@ int main(int argc, char ** argv)
 	evhtp_t  * htp    = evhtp_new(evbase, NULL);
 	evhtp_callback_t *cb = NULL;
 
-	// register our list of API calls and their handlers
-	for (size_t i = 0; i < apiRegistry.size(); i++) {
-		const struct HttpApiEntry *apiEnt = &apiRegistry[i];
-
-		// register evhtp hook
-		if (apiEnt->pathIsRegex)
-			cb = evhtp_set_regex_cb(htp, apiEnt->path, apiEnt->cb, (void *) apiEnt);
-		else
-			cb = evhtp_set_cb(htp, apiEnt->path, apiEnt->cb, (void *) apiEnt);
-
-		// set standard per-callback initialization hook
-		evhtp_callback_set_hook(cb, evhtp_hook_on_headers,
-			apiEnt->wantInput ?
-				((evhtp_hook) upload_headers_cb) :
-				((evhtp_hook) no_upload_headers_cb), (void *) apiEnt);
-	}
-
-	if (!init_db_views())
+	if (!init_db_views() ||
+	    !init_endpoints())
 		return EXIT_FAILURE;
 
 	if (dbViews.empty()) {
 		fprintf(stderr, "no db views, exiting\n");
 		return EXIT_FAILURE;
+	}
+	if (srvEndpoints.empty()) {
+		fprintf(stderr, "no endpoints, exiting\n");
+		return EXIT_FAILURE;
+	}
+
+	// register our list of API calls and their handlers
+	for (auto it = srvEndpoints.begin(); it != srvEndpoints.end(); it++) {
+		Unisrv::Endpoint *endpt = &srvEndpoints[it->first];
+
+		// register evhtp hook
+		cb = evhtp_set_cb(htp, endpt->urlpath.c_str(), http_req_cb, (void *) endpt);
+
+		// set standard per-callback initialization hook
+		evhtp_callback_set_hook(cb, evhtp_hook_on_headers,
+			endpt->wantInput ?
+				((evhtp_hook) upload_headers_cb) :
+				((evhtp_hook) no_upload_headers_cb), (void *) endpt);
 	}
 
 	// Daemonize
