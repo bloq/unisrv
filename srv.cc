@@ -21,6 +21,8 @@
 #include "Util.h"
 #include "HttpUtil.h"
 #include "srv.h"
+#include "drivers/rocksdb.h"
+#include "drivers/gdbm.h"
 
 using namespace std;
 
@@ -78,9 +80,13 @@ static Unisrv::View *getView(const std::string& name,
 
 	Unisrv::View *view = nullptr;
 
-	if (driver == "rocksdb") {
+	if (driver == "rocksdb")
 		view = new Unisrv::RocksView(name, path);
-	} else {
+
+	else if (driver == "gdbm")
+		view = new Unisrv::GdbmView(name, path);
+
+	else {
 		// unknown driver ; do nothing
 	}
 

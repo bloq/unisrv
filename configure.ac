@@ -35,9 +35,11 @@ AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_RANLIB
 
+CPPFLAGS="${CPPFLAGS} -std=c++11"
+
 dnl Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([endian.h sys/endian.h byteswap.h stdio.h stdlib.h unistd.h strings.h sys/types.h sys/stat.h sys/select.h sys/prctl.h])
+AC_CHECK_HEADERS([endian.h sys/endian.h byteswap.h stdio.h stdlib.h unistd.h strings.h sys/types.h sys/stat.h sys/select.h sys/prctl.h rocksdb/db.h gdbm.h])
 
 AC_CHECK_DECLS([le16toh, le32toh, le64toh, htole16, htole32, htole64, be16toh, be32toh, be64toh, htobe16, htobe32, htobe64],,,
 		[#if HAVE_ENDIAN_H
@@ -65,9 +67,11 @@ AX_CHECK_OPENSSL
 
 dnl AC_CHECK_LIB(gssrpc, gssrpc_svc_register, GSSRPC_LIBS=-lgssrpc, exit 1)
 
+DB_LIBS=""
 AC_CHECK_LIB(argp, argp_parse, ARGP_LIB=-largp)
 AC_CHECK_LIB(uuid, uuid_generate_random, UUID_LIB=-luuid)
-AC_CHECK_LIB(rocksdb, rocksdb_open, ROCKS_LIB=-lrocksdb)
+AC_CHECK_LIB(rocksdb, rocksdb_open, DB_LIBS="$DB_LIBS -lrocksdb")
+AC_CHECK_LIB(gdbm, gdbm_open, DB_LIBS="$DB_LIBS -lgdbm")
 
 dnl -------------------------------------
 dnl Checks for optional library functions
@@ -87,7 +91,7 @@ dnl AC_SUBST(DB4_LIBS)
 dnl AC_SUBST(EVENT_LIBS)
 AC_SUBST(ARGP_LIB)
 AC_SUBST(UUID_LIB)
-AC_SUBST(ROCKS_LIB)
+AC_SUBST(DB_LIBS)
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

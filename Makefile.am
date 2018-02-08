@@ -1,5 +1,5 @@
 
-AM_CPPFLAGS = -std=c++11 $(PTHREAD_CFLAGS) -I$(top_srcdir)/include
+AM_CPPFLAGS = $(PTHREAD_CFLAGS) -I$(top_srcdir)
 DISTCHECK_CONFIGURE_FLAGS = CXXFLAGS="-O2 -Wall -g -I/usr/local/include/evhtp"
 
 sbin_PROGRAMS = unisrvd dbadm
@@ -14,6 +14,8 @@ libcommon_a_SOURCES = \
 
 unisrvd_SOURCES = \
 	srv.h srv.cc \
+	drivers/rocksdb.h \
+	drivers/gdbm.h \
 	HttpUtil.h HttpUtil.cc
 
 unisrvd_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
@@ -23,7 +25,7 @@ unisrvd_LDADD = \
 	-levhtp \
 	-lunivalue \
 	-levent_core -levent_openssl \
-	$(OPENSSL_LIBS) $(ARGP_LIB) $(UUID_LIB) $(ROCKS_LIB) $(ZMQ_LIB)
+	$(OPENSSL_LIBS) $(ARGP_LIB) $(UUID_LIB) $(DB_LIBS)
 
 dbadm_SOURCES = dbadm.cc
 dbadm_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
@@ -31,7 +33,7 @@ dbadm_LDADD = \
 	libcommon.a \
 	$(PTHREAD_LIBS)		\
 	-lunivalue \
-	$(OPENSSL_LIBS) $(ARGP_LIB) $(UUID_LIB) $(ROCKS_LIB)
+	$(OPENSSL_LIBS) $(ARGP_LIB) $(UUID_LIB) $(DB_LIBS)
 
 EXTRA_DIST = srv-tests.sh test-config-srv.json
 TESTS = srv-tests.sh

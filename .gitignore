@@ -17,6 +17,7 @@ missing
 unisrv-*.tar.gz
 
 srvdb/
+srvgdbm
 
 .deps/
 Makefile
