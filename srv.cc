@@ -21,7 +21,6 @@
 #include "Util.h"
 #include "HttpUtil.h"
 #include "srv.h"
-#include "rocksdb/db.h"
 
 using namespace std;
 
@@ -64,8 +63,36 @@ static bool opt_dump_config = false;
 static UniValue serverCfg;
 static evbase_t *evbase = NULL;
 
-static rocksdb::DB* db;
-static rocksdb::Options dboptions;
+static map<std::string,Unisrv::View*> dbViews;
+
+static Unisrv::View *getView(const std::string& name,
+			     const std::string& driver_,
+			     const std::string& path)
+{
+	string driver = driver_;
+	if (name.empty() || path.empty())
+		return nullptr;
+	if (driver.empty())
+		driver = "rocksdb";
+
+	Unisrv::View *view = nullptr;
+
+	if (driver == "rocksdb") {
+		view = new Unisrv::RocksView(name, path);
+	} else {
+		// unknown driver ; do nothing
+	}
+
+	if (!view)
+		return nullptr;
+
+	if (!view->open()) {
+		delete view;
+		return nullptr;
+	}
+
+	return view;
+}
 
 static void
 logRequest(evhtp_request_t *req, ReqState *state)
@@ -403,21 +430,38 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	return 0;
 }
 
-static bool init_db()
+static bool init_db_views()
 {
-	string dbname = serverCfg["db"].getValStr();
-	dboptions.create_if_missing = true;
-	rocksdb::Status status =
-	  rocksdb::DB::Open(dboptions, dbname, &db);
+	const UniValue& viewsList = serverCfg["views"];
+	for (unsigned int i = 0; i < viewsList.size(); i++) {
+		const UniValue& viewCfg = viewsList[i];
+		const string& viewName = viewCfg["name"].getValStr();
+
+		Unisrv::View *view = getView(
+			viewName,
+			viewCfg["driver"].getValStr(),
+			viewCfg["path"].getValStr());
+		if (view == nullptr) {
+			fprintf(stderr, "failed to open view %s\n",
+				viewName.c_str());
+			return false;
+		}
+
+		dbViews[viewName] = view;
+	}
 
 	return true;
 }
 
 static bool read_config_init()
 {
-	if (!readJsonFile(opt_configfn, serverCfg)) {
-		perror(opt_configfn.c_str());
-		return false;
+	if (access(opt_configfn.c_str(), F_OK) == 0) {
+		if (!readJsonFile(opt_configfn, serverCfg)) {
+			perror(opt_configfn.c_str());
+			return false;
+		}
+	} else {
+		fprintf(stderr, "Config file absent, continuing with built-in defaults\n");
 	}
 
 	if (!serverCfg.exists("db"))
@@ -430,6 +474,7 @@ static bool read_config_init()
 		opt_daemon = serverCfg["daemon"].getBool();
 	if (serverCfg.exists("pidFile"))
 		opt_pid_file = serverCfg["pidFile"].getValStr();
+
 	return true;
 }
 
@@ -492,8 +537,13 @@ int main(int argc, char ** argv)
 				((evhtp_hook) no_upload_headers_cb), (void *) apiEnt);
 	}
 
-	if (!init_db())
+	if (!init_db_views())
 		return EXIT_FAILURE;
+
+	if (dbViews.empty()) {
+		fprintf(stderr, "no db views, exiting\n");
+		return EXIT_FAILURE;
+	}
 
 	// Daemonize
 	if (opt_daemon && daemon(0, 0) < 0) {
