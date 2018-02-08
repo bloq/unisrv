@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CWD=`pwd`
-PID_FN="$CWD/srv.pid"
+PID_FN="$CWD/unisrvd.pid"
 CFG_FN="$srcdir/test-config-srv.json"
 
 #
@@ -16,7 +16,7 @@ then
 fi
 
 # Start daemon in background
-./srv -c $CFG_FN -p $PID_FN --daemon
+./unisrvd -c $CFG_FN -p $PID_FN --daemon
 sleep 1
 
 # PID file must exist

@@ -2,7 +2,7 @@
 AM_CPPFLAGS = -std=c++11 $(PTHREAD_CFLAGS) -I$(top_srcdir)/include
 DISTCHECK_CONFIGURE_FLAGS = CXXFLAGS="-O2 -Wall -g -I/usr/local/include/evhtp"
 
-sbin_PROGRAMS = srv dbadm
+sbin_PROGRAMS = unisrvd dbadm
 
 noinst_LIBRARIES = libcommon.a
 
@@ -12,12 +12,12 @@ libcommon_a_SOURCES = \
 	utilstrencodings.cpp \
 	Util.h Util.cc
 
-srv_SOURCES = \
+unisrvd_SOURCES = \
 	srv.h srv.cc \
 	HttpUtil.h HttpUtil.cc
 
-srv_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
-srv_LDADD = \
+unisrvd_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
+unisrvd_LDADD = \
 	libcommon.a \
 	$(PTHREAD_LIBS)		\
 	-levhtp \

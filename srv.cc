@@ -25,8 +25,8 @@
 
 using namespace std;
 
-#define PROGRAM_NAME "srv"
-#define DEFAULT_PID_FILE "/var/run/srv.pid"
+#define PROGRAM_NAME "unisrvd"
+#define DEFAULT_PID_FILE "/var/run/unisrvd.pid"
 #define DEFAULT_BIND_ADDR "0.0.0.0"
 #define DEFAULT_DB_NAME "srvdb"
 

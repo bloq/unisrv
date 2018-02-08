@@ -25,7 +25,7 @@ config.log
 config.status
 
 libcommon.a
-srv
+unisrvd
 dbadm
 
 stamp-h1
