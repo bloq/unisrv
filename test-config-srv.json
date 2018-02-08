@@ -1,1 +1,19 @@
-{}
+{
+	"views": [
+		{
+			"name": "data",
+			"path": "./srvdb"
+		}
+	],
+
+	"endpoints": [
+		{
+			"name": "data",
+			"urlpath": "/",
+			"protocol": "jsonrpc",
+			"view": "data",
+			"readonly": false,
+			"auth": false
+		}
+	]
+}
