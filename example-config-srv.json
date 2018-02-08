@@ -1,0 +1,6 @@
+{
+	"bindAddress": "0.0.0.0",
+	"bindPort": 8989,
+	"daemon": true,
+	"pidFile": "/var/run/srv.pid"
+}
