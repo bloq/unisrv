@@ -301,7 +301,65 @@ no_upload_headers_cb(evhtp_request_t * req, evhtp_headers_t * hdrs, void *arg)
 	return EVHTP_RES_OK;
 }
 
-bool validJsonRpc(const UniValue& val)
+static void rest_get(evhtp_request_t *req, ReqState *state,
+		     Unisrv::Endpoint *endpt)
+{
+	string key(req->uri->path->match_start);
+	string value;
+	bool rc = endpt->view->get(key, &value);
+	if (!rc) {
+		evhtp_send_reply(req, EVHTP_RES_NOTFOUND);
+		return;
+	}
+
+	evhtp_headers_add_header(req->headers_out,
+		evhtp_header_new("Content-Type", "application/octet-stream", 0, 0));
+	evbuffer_add(req->buffer_out, value.c_str(), value.size());
+	evhtp_send_reply(req, EVHTP_RES_OK);
+}
+
+static void rest_put(evhtp_request_t *req, ReqState *state,
+		     Unisrv::Endpoint *endpt)
+{
+	string key(req->uri->path->match_start);
+	bool rc = endpt->view->put(key, state->body);
+	if (!rc) {
+		evhtp_send_reply(req, EVHTP_RES_SERVERR);
+		return;
+	}
+
+	evhtp_send_reply(req, EVHTP_RES_OK);
+}
+
+static void rest_del(evhtp_request_t *req, ReqState *state,
+		     Unisrv::Endpoint *endpt)
+{
+	string key(req->uri->path->match_start);
+	bool rc = endpt->view->del(key);
+	if (!rc) {
+		evhtp_send_reply(req, EVHTP_RES_NOTFOUND);
+		return;
+	}
+
+	evhtp_send_reply(req, EVHTP_RES_OK);
+}
+
+static void http_req_rest(evhtp_request_t *req, ReqState *state,
+		   Unisrv::Endpoint *endpt)
+{
+	if (req->method == htp_method_GET)
+		rest_get(req, state, endpt);
+	else if (req->method == htp_method_PUT)
+		rest_put(req, state, endpt);
+	else if (req->method == htp_method_DELETE)
+		rest_del(req, state, endpt);
+
+	else {
+		evhtp_send_reply(req, EVHTP_RES_METHNALLOWED);
+	}
+}
+
+static bool validJsonRpc(const UniValue& val)
 {
 	std::map<std::string,UniValue::VType> schema;
 	schema["method"] = UniValue::VSTR;
@@ -448,9 +506,11 @@ void http_req_cb(evhtp_request_t * req, void * arg)
 	if (!reqPreProcessing(req, state))
 		return;		// pre-processing failed; response already sent
 
-	if (endpt->protocol == "jsonrpc") {
+	if (endpt->protocol == "jsonrpc")
 		http_req_jsonrpc(req, state->jval, endpt);
-	} else {
+	else if (endpt->protocol == "rest")
+		http_req_rest(req, state, endpt);
+	else {
 		assert(0);	// should never happen
 	}
 }
@@ -510,7 +570,8 @@ static bool init_endpoints()
 				endpt.name.c_str());
 			return false;
 		}
-		if (endpt.protocol != "jsonrpc") {
+		if ((endpt.protocol != "jsonrpc") &&
+		    (endpt.protocol != "rest")) {
 			syslog(LOG_ERR, "endpoint %s: invalid protocol\n",
 				endpt.name.c_str());
 			return false;
@@ -632,7 +693,17 @@ int main(int argc, char ** argv)
 		Unisrv::Endpoint *endpt = &srvEndpoints[it->first];
 
 		// register evhtp hook
-		cb = evhtp_set_cb(htp, endpt->urlpath.c_str(), http_req_cb, (void *) endpt);
+		if (endpt->protocol == "rest") {
+			string rx = "^" + endpt->urlpath;
+			if (rx[rx.size() - 1] != '/')
+				rx += "/";
+			rx += "(.*)";
+
+			cb = evhtp_set_regex_cb(htp, rx.c_str(),
+						http_req_cb, (void *) endpt);
+		} else
+			cb = evhtp_set_cb(htp, endpt->urlpath.c_str(),
+					  http_req_cb, (void *) endpt);
 
 		// set standard per-callback initialization hook
 		evhtp_callback_set_hook(cb, evhtp_hook_on_headers,
