@@ -27,7 +27,7 @@ config.status
 
 libcommon.a
 unisrvd
-dbadm
+dbtool
 
 stamp-h1
 test-driver

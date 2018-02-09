@@ -2,7 +2,7 @@
 AM_CPPFLAGS = $(PTHREAD_CFLAGS) -I$(top_srcdir)
 DISTCHECK_CONFIGURE_FLAGS = CXXFLAGS="-O2 -Wall -g -I/usr/local/include/evhtp"
 
-sbin_PROGRAMS = unisrvd dbadm
+sbin_PROGRAMS = unisrvd dbtool
 
 noinst_LIBRARIES = libcommon.a
 
@@ -27,9 +27,9 @@ unisrvd_LDADD = \
 	-levent_core -levent_openssl \
 	$(OPENSSL_LIBS) $(ARGP_LIB) $(UUID_LIB) $(DB_LIBS)
 
-dbadm_SOURCES = dbadm.cc
-dbadm_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
-dbadm_LDADD = \
+dbtool_SOURCES = dbtool.cc
+dbtool_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
+dbtool_LDADD = \
 	libcommon.a \
 	$(PTHREAD_LIBS)		\
 	-lunivalue \

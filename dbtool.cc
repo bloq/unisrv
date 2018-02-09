@@ -25,7 +25,7 @@
 
 using namespace std;
 
-#define PROGRAM_NAME "dbadm"
+#define PROGRAM_NAME "dbtool"
 
 static const char doc[] =
 PROGRAM_NAME " - rpc server db util";
