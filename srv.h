@@ -88,5 +88,8 @@ public:
 };
 
 bool reqPreProcessing(evhtp_request_t *req, ReqState *state);
+Unisrv::View *getView(const std::string& name,
+		     const std::string& driver_,
+		     const std::string& path);
 
 #endif // __SRV_H__

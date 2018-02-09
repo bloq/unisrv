@@ -13,7 +13,7 @@ libcommon_a_SOURCES = \
 	Util.h Util.cc
 
 unisrvd_SOURCES = \
-	srv.h srv.cc \
+	srv.h srv.cc db.cc \
 	drivers/rocksdb.h \
 	drivers/gdbm.h \
 	HttpUtil.h HttpUtil.cc
