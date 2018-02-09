@@ -2,18 +2,17 @@
 	"views": [
 		{
 			"name": "data",
-			"path": "./srvdb"
+			"path": "./srvdb",
+			"driver": "rocksdb"
 		}
 	],
 
 	"endpoints": [
 		{
-			"name": "data",
+			"name": "ep-data",
 			"urlpath": "/",
 			"protocol": "jsonrpc",
-			"view": "data",
-			"readonly": false,
-			"auth": false
+			"view": "data"
 		}
 	]
 }
