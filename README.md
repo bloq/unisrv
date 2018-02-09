@@ -13,6 +13,10 @@ protocol interface and authentication methods.
 
 See [configuration documentation](configuration.md) for details.
 
+## Logging
+
+Log output is sent to the console (stderr) and Unix syslog service.
+
 ## Supported database types
 
 The following database types are supported:
