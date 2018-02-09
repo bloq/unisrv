@@ -50,7 +50,8 @@ public:
 	std::string	protocol;
 	View		*view;
 
-	bool		authReq;
+	std::string	authName;
+
 	bool		wantInput;
 };
 
@@ -94,11 +95,19 @@ public:
 	}
 };
 
+class AuthInfo {
+public:
+	std::string		name;
+	std::string		method;
+
+	std::string		dbPath;
+
+	std::map<std::string,std::string> secrets;
+};
+
 } // namespace Unisrv
 
 struct HttpApiEntry {
-	bool			authReq;	// authentication req'd?
-
 	const char		*path;
 	bool			pathIsRegex;
 

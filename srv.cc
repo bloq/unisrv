@@ -67,8 +67,10 @@ static bool opt_dump_drivers = false;
 static UniValue serverCfg;
 static evbase_t *evbase = NULL;
 
-static map<std::string,Unisrv::View*> dbViews;
-static map<std::string,Unisrv::Endpoint> srvEndpoints;
+static map<string,Unisrv::View*> dbViews;
+static map<string,Unisrv::Endpoint> srvEndpoints;
+
+static map<string,Unisrv::AuthInfo> authInfo;
 
 static void
 logRequest(evhtp_request_t *req, ReqState *state)
@@ -147,7 +149,6 @@ static void reqInit(evhtp_request_t *req, ReqState *state,
 	state->endpt = endpt;
 	state->apiEnt = &state->apiEnt_;
 
-	state->apiEnt_.authReq = endpt->authReq;
 	state->apiEnt_.cb = nullptr;
 	state->apiEnt_.path = endpt->urlpath.c_str();
 	state->apiEnt_.wantInput = endpt->wantInput;
@@ -173,14 +174,10 @@ static void reqInit(evhtp_request_t *req, ReqState *state,
 }
 
 static bool reqVerify(evhtp_request_t *req,
-		      const struct HttpApiEntry *apiEnt,
 		      const std::string& authUser,
 		      const std::string& authSecret)
 {
-	assert(req && apiEnt);
-
-	if (!apiEnt->authReq)
-		return true;
+	assert(req);
 
 	// input remote Auth hdr
 	const char *authcstr = evhtp_kv_find (req->headers_in, "Authorization");
@@ -201,12 +198,24 @@ bool reqPreProcessing(evhtp_request_t *req, ReqState *state)
 	assert(req && state && state->apiEnt);
 
 	const struct HttpApiEntry *apiEnt = state->apiEnt;
+	Unisrv::Endpoint *endpt = state->endpt;
 
 	// check authorization, if method requires it
-	if (!reqVerify(req, apiEnt,
-		       "testuser", "testpass")) {
-		evhtp_send_reply(req, EVHTP_RES_FORBIDDEN);
-		return false;
+	if (!endpt->authName.empty()) {
+		assert(authInfo.count(endpt->authName) > 0);
+		Unisrv::AuthInfo ai = authInfo[endpt->authName];
+
+		if (ai.method == "simple") {
+			auto it = ai.secrets.begin();
+			string authUser = it->first;
+			string authSecret = it->second;
+			if (!reqVerify(req, authUser, authSecret)) {
+				evhtp_send_reply(req, EVHTP_RES_FORBIDDEN);
+				return false;
+			}
+		} else {
+			assert(0);
+		}
 	}
 
 	// parse JSON input, if API entry requires it
@@ -529,7 +538,16 @@ static bool init_endpoints()
 			endpt.protocol = "jsonrpc";
 		const string& viewName = endpointCfg["view"].getValStr();
 		endpt.wantInput = !endpointCfg["readonly"].isTrue();
-		endpt.authReq = endpointCfg["auth"].isTrue();
+
+		endpt.authName = endpointCfg["auth"].getValStr();
+		if (endpt.authName.empty()) {
+			// do nothing; no auth
+		} else if (authInfo.count(endpt.authName) == 0) {
+			syslog(LOG_ERR, "endpoint %s: unknown auth %s\n",
+				endpt.name.c_str(),
+				endpt.authName.c_str());
+			return false;
+		}
 
 		if (endpt.name.empty() || endpt.urlpath.empty() ||
 		    viewName.empty()) {
@@ -581,6 +599,37 @@ static bool init_db_views()
 		}
 
 		dbViews[viewName] = view;
+	}
+
+	return true;
+}
+
+static bool init_auth()
+{
+	const UniValue& authList = serverCfg["authentication"];
+	for (unsigned int i = 0; i < authList.size(); i++) {
+		const UniValue& authCfg = authList[i];
+		const string& authName = authCfg["name"].getValStr();
+
+		Unisrv::AuthInfo ai;
+		ai.name = authName;
+		ai.method = authCfg["method"].getValStr();
+		if (ai.method == "simple") {
+			string un = authCfg["username"].getValStr();
+			string pw = authCfg["secret"].getValStr();
+			ai.secrets[un] = pw;
+		} else if (ai.method == "table") {
+			std::map<std::string,UniValue> tbl;
+			authCfg["table"].getObjMap(tbl);
+			for (auto it = tbl.begin(); it != tbl.end(); it++) {
+				ai.secrets[it->first] = it->second.getValStr();
+			}
+		} else {
+			syslog(LOG_ERR, "invalid auth method");
+			return false;
+		}
+
+		authInfo[authName] = ai;
 	}
 
 	return true;
@@ -662,7 +711,7 @@ int main(int argc, char ** argv)
 		return EXIT_SUCCESS;
 	}
 
-	if (!init_db_views() || !init_endpoints())
+	if (!init_auth() || !init_db_views() || !init_endpoints())
 		return EXIT_FAILURE;
 
 	if (dbViews.empty()) {
