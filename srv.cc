@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <evhtp.h>
 #include <ctype.h>
+#include <syslog.h>
 #include <assert.h>
 #include <univalue.h>
 #include "Util.h"
@@ -501,21 +502,21 @@ static bool init_endpoints()
 
 		if (endpt.name.empty() || endpt.urlpath.empty() ||
 		    viewName.empty()) {
-			fprintf(stderr, "endpoint details missing\n");
+			syslog(LOG_ERR, "endpoint details missing\n");
 			return false;
 		}
 		if (endpt.urlpath[0] != '/') {
-			fprintf(stderr, "endpoint %s: invalid urlpath\n",
+			syslog(LOG_ERR, "endpoint %s: invalid urlpath\n",
 				endpt.name.c_str());
 			return false;
 		}
 		if (endpt.protocol != "jsonrpc") {
-			fprintf(stderr, "endpoint %s: invalid protocol\n",
+			syslog(LOG_ERR, "endpoint %s: invalid protocol\n",
 				endpt.name.c_str());
 			return false;
 		}
 		if (dbViews.count(viewName) == 0) {
-			fprintf(stderr, "endpoint %s: unknown view %s\n",
+			syslog(LOG_ERR, "endpoint %s: unknown view %s\n",
 				endpt.name.c_str(),
 				viewName.c_str());
 			return false;
@@ -542,7 +543,7 @@ static bool init_db_views()
 			viewCfg["driver"].getValStr(),
 			viewCfg["path"].getValStr());
 		if (view == nullptr) {
-			fprintf(stderr, "failed to open view %s\n",
+			syslog(LOG_ERR, "failed to open view %s\n",
 				viewName.c_str());
 			return false;
 		}
@@ -561,7 +562,7 @@ static bool read_config_init()
 			return false;
 		}
 	} else {
-		fprintf(stderr, "Config file absent, continuing with built-in defaults\n");
+		syslog(LOG_WARNING, "Config file absent, continuing with built-in defaults\n");
 	}
 
 	if (!serverCfg.exists("db"))
@@ -599,6 +600,8 @@ int main(int argc, char ** argv)
 		return EXIT_FAILURE;
 	}
 
+	openlog(PROGRAM_NAME, LOG_PID | LOG_PERROR, LOG_USER);
+
 	// read json configuration, and initialize early defaults
 	if (!read_config_init())
 		return EXIT_FAILURE;
@@ -618,11 +621,11 @@ int main(int argc, char ** argv)
 		return EXIT_FAILURE;
 
 	if (dbViews.empty()) {
-		fprintf(stderr, "no db views, exiting\n");
+		syslog(LOG_ERR, "no db views, exiting\n");
 		return EXIT_FAILURE;
 	}
 	if (srvEndpoints.empty()) {
-		fprintf(stderr, "no endpoints, exiting\n");
+		syslog(LOG_ERR, "no endpoints, exiting\n");
 		return EXIT_FAILURE;
 	}
 
@@ -661,6 +664,9 @@ int main(int argc, char ** argv)
 			  serverCfg["bindAddress"].getValStr().c_str(),
 			  atoi(serverCfg["bindPort"].getValStr().c_str()),
 			  1024);
+
+	syslog(LOG_INFO, "initialized; ready for socket activity");
+
 	event_base_loop(evbase, 0);
 	return 0;
 }
