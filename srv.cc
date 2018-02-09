@@ -669,15 +669,6 @@ static void shutdown_signal(int signo)
 	event_base_loopbreak(evbase);
 }
 
-static void dump_drivers()
-{
-	vector<string> driverNames;
-	list_db_drivers(driverNames);
-	for (auto it = driverNames.begin(); it != driverNames.end(); it++) {
-		printf("%s\n", (*it).c_str());
-	}
-}
-
 int main(int argc, char ** argv)
 {
 	// parse command line

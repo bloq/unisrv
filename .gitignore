@@ -26,6 +26,7 @@ config.log
 config.status
 
 libcommon.a
+libdbdriver.a
 unisrvd
 dbtool
 

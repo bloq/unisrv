@@ -4,7 +4,12 @@ DISTCHECK_CONFIGURE_FLAGS = CXXFLAGS="-O2 -Wall -g -I/usr/local/include/evhtp"
 
 sbin_PROGRAMS = unisrvd dbtool
 
-noinst_LIBRARIES = libcommon.a
+noinst_LIBRARIES = libcommon.a libdbdriver.a
+
+libdbdriver_a_SOURCES = \
+	db.cc \
+	drivers/rocksdb.cc \
+	drivers/gdbm.cc
 
 libcommon_a_SOURCES = \
 	tinyformat.h \
@@ -13,14 +18,13 @@ libcommon_a_SOURCES = \
 	Util.h Util.cc
 
 unisrvd_SOURCES = \
-	srv.h srv.cc db.cc \
-	drivers/rocksdb.cc \
-	drivers/gdbm.cc \
+	srv.h srv.cc \
 	HttpUtil.h HttpUtil.cc
 
 unisrvd_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
 unisrvd_LDADD = \
 	libcommon.a \
+	libdbdriver.a \
 	$(PTHREAD_LIBS)		\
 	-levhtp \
 	-lunivalue \
@@ -31,6 +35,7 @@ dbtool_SOURCES = dbtool.cc
 dbtool_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)
 dbtool_LDADD = \
 	libcommon.a \
+	libdbdriver.a \
 	$(PTHREAD_LIBS)		\
 	-lunivalue \
 	$(OPENSSL_LIBS) $(ARGP_LIB) $(UUID_LIB) $(DB_LIBS)

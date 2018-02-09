@@ -141,5 +141,6 @@ Unisrv::View *getView(const std::string& name,
 		     const std::string& path);
 bool register_db_drivers();
 void list_db_drivers(std::vector<std::string>& names);
+void dump_drivers();
 
 #endif // __SRV_H__

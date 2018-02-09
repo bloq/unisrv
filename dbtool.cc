@@ -31,8 +31,8 @@ static const char doc[] =
 PROGRAM_NAME " - universal db tool";
 
 static struct argp_option options[] = {
-	{ "db", 1001, "FILE", 0,
-	  "Database pathname" },
+	{ "rocksdb", 2001, "FILE", 0,
+	  "Rocksdb Database pathname" },
 
 	{ "load-json", 1006, "JSON-FILE", 0,
 	  "Load JSON object into db" },
@@ -46,6 +46,9 @@ static struct argp_option options[] = {
 	{ "dump", 1004, NULL, 0,
 	  "Dump all keys and values" },
 
+	{ "dump-drivers", 1008, NULL, 0,
+	  "Do not open any database; output list of Db drivers instead" },
+
 	{ "clear", 1005, NULL, 0,
 	  "Delete all data, before loading" },
 
@@ -55,9 +58,11 @@ static struct argp_option options[] = {
 static error_t parse_opt (int key, char *arg, struct argp_state *state);
 static const struct argp argp = { options, parse_opt, NULL, doc };
 
+static string opt_db_driver;
 static string opt_db_fn;
 static string opt_load_json_fn;
 static string opt_key_prefix;
+static bool opt_dump_drivers = false;
 static bool opt_dump_keys = false;
 static bool opt_dump_db = false;
 static bool opt_clear_db = false;
@@ -66,7 +71,8 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 {
 	switch (key) {
 
-	case 1001:
+	case 2001:
+		opt_db_driver = "rocksdb";
 		opt_db_fn = arg;
 		break;
 
@@ -88,6 +94,10 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 
 	case 1007:
 		opt_key_prefix = arg;
+		break;
+
+	case 1008:
+		opt_dump_drivers = true;
 		break;
 
 	case ARGP_KEY_END:
@@ -157,6 +167,14 @@ int main(int argc, char ** argv)
 		fprintf(stderr, "%s: argp_parse failed: %s\n",
 			argv[0], strerror(argp_rc));
 		return EXIT_FAILURE;
+	}
+
+	if (!register_db_drivers()) {
+		assert(0);
+	}
+	if (opt_dump_drivers) {
+		dump_drivers();
+		return EXIT_SUCCESS;
 	}
 
 	if (opt_db_fn.empty()) {

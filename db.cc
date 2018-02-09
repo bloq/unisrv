@@ -44,3 +44,12 @@ void list_db_drivers(std::vector<std::string>& names)
 	registry.nameList(names);
 }
 
+void dump_drivers()
+{
+	vector<string> driverNames;
+	list_db_drivers(driverNames);
+	for (auto it = driverNames.begin(); it != driverNames.end(); it++) {
+		printf("%s\n", (*it).c_str());
+	}
+}
+
