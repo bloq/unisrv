@@ -565,8 +565,6 @@ static bool read_config_init()
 		syslog(LOG_WARNING, "Config file absent, continuing with built-in defaults\n");
 	}
 
-	if (!serverCfg.exists("db"))
-		serverCfg.pushKV("db", DEFAULT_DB_NAME);
 	if (!serverCfg.exists("bindAddress"))
 		serverCfg.pushKV("bindAddress", DEFAULT_BIND_ADDR);
 	if (!serverCfg.exists("bindPort"))
@@ -668,5 +666,7 @@ int main(int argc, char ** argv)
 	syslog(LOG_INFO, "initialized; ready for socket activity");
 
 	event_base_loop(evbase, 0);
+
+	syslog(LOG_INFO, "shutdown complete.");
 	return 0;
 }
