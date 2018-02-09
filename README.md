@@ -9,6 +9,10 @@ Unisrv can export a gdbm database over HTTP REST, a rocksdb database
 over JSON-RPC, and more.  You can mix and match database type, network
 protocol interface and authentication methods.
 
+## Configuration
+
+See [configuration documentation](configuration.md) for details.
+
 ## Supported database types
 
 The following database types are supported:
