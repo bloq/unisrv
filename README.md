@@ -36,13 +36,14 @@ export a separate dataset from rocksdb at
 
 ## Dependencies
 
+* C++ compiler
 * OpenSSL
 * One or more database libraries
 * libevhtp: https://github.com/criticalstack/libevhtp
 
 ## Building and installing
 
-This uses the standard autotools pattern:
+This uses the standard autotools pattern for building C++ programs:
 
 	$ ./autogen.sh
 	$ CXXFLAGS="-O2 -Wall -g -I/usr/local/include/evhtp" ./configure
