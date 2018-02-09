@@ -2,33 +2,17 @@
 #include "unisrv-config.h"
 
 #include "srv.h"
-#include "drivers/rocksdb.h"
-#include "drivers/gdbm.h"
 
 using namespace std;
+using namespace Unisrv;
+
+DbRegistry registry;
 
 Unisrv::View *getView(const std::string& name,
 		     const std::string& driver_,
 		     const std::string& path)
 {
-	string driver = driver_;
-	if (name.empty() || path.empty())
-		return nullptr;
-	if (driver.empty())
-		driver = "rocksdb";
-
-	Unisrv::View *view = nullptr;
-
-	if (driver == "rocksdb")
-		view = new Unisrv::RocksView(name, path);
-
-	else if (driver == "gdbm")
-		view = new Unisrv::GdbmView(name, path);
-
-	else {
-		// unknown driver ; do nothing
-	}
-
+	Unisrv::View *view = registry.newView(name, driver_, path);
 	if (!view)
 		return nullptr;
 
@@ -38,5 +22,25 @@ Unisrv::View *getView(const std::string& name,
 	}
 
 	return view;
+}
+
+bool register_db_drivers()
+{
+#ifdef HAVE_GDBM_H
+	Unisrv::DbDriver *new_gdbm_driver();
+	registry.add(new_gdbm_driver());
+#endif
+
+#ifdef HAVE_ROCKSDB_DB_H
+	Unisrv::DbDriver *new_rocksdb_driver();
+	registry.add(new_rocksdb_driver());
+#endif
+
+	return true;
+}
+
+void list_db_drivers(std::vector<std::string>& names)
+{
+	registry.nameList(names);
 }
 

@@ -14,8 +14,8 @@ libcommon_a_SOURCES = \
 
 unisrvd_SOURCES = \
 	srv.h srv.cc db.cc \
-	drivers/rocksdb.h \
-	drivers/gdbm.h \
+	drivers/rocksdb.cc \
+	drivers/gdbm.cc \
 	HttpUtil.h HttpUtil.cc
 
 unisrvd_LDFLAGS = $(PTHREAD_CFLAGS) $(OPENSSL_LDFLAGS)

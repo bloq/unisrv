@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <string>
 #include <vector>
+#include <map>
 #include <cstdint>
 #include <evhtp.h>
 #include <univalue.h>
@@ -53,6 +54,46 @@ public:
 	bool		wantInput;
 };
 
+class DbDriver {
+protected:
+	std::string		name_;
+
+public:
+	DbDriver(const std::string& name) {
+		name_ = name;
+	}
+	virtual ~DbDriver() {}
+
+	const std::string& name() const { return name_; }
+
+	virtual View *newView(const std::string& name, const std::string& path) = 0;
+};
+
+class DbRegistry {
+public:
+	std::map<std::string,DbDriver*>	drivers;
+
+	void add(DbDriver *newDriver) {
+		drivers[newDriver->name()] = newDriver;
+	}
+
+	void nameList(std::vector<std::string>& names) const {
+		names.clear();
+		for (auto it = drivers.begin(); it != drivers.end(); it++) {
+			names.push_back(it->first);
+		}
+	}
+
+	View *newView(const std::string& name, const std::string& driverName,
+		      const std::string& path) {
+		if (drivers.count(driverName) == 0)
+			return nullptr;
+
+		DbDriver *driver = drivers[driverName];
+		return driver->newView(name, path);
+	}
+};
+
 } // namespace Unisrv
 
 struct HttpApiEntry {
@@ -91,5 +132,7 @@ bool reqPreProcessing(evhtp_request_t *req, ReqState *state);
 Unisrv::View *getView(const std::string& name,
 		     const std::string& driver_,
 		     const std::string& path);
+bool register_db_drivers();
+void list_db_drivers(std::vector<std::string>& names);
 
 #endif // __SRV_H__

@@ -1,5 +1,3 @@
-#ifndef __DRIVERS_ROCKSDB_H__
-#define __DRIVERS_ROCKSDB_H__
 
 #include "rocksdb/db.h"
 #include "srv.h"
@@ -58,6 +56,20 @@ public:
 	}
 };
 
+class RocksDriver : public DbDriver {
+public:
+	RocksDriver() : DbDriver("rocksdb") {}
+	~RocksDriver() {}
+
+	View *newView(const std::string& name, const std::string& path) {
+		return new Unisrv::RocksView(name, path);
+	}
+};
+
 } // namespace Unisrv
 
-#endif // __DRIVERS_ROCKSDB_H__
+Unisrv::DbDriver *new_rocksdb_driver()
+{
+	return new Unisrv::RocksDriver();
+}
+

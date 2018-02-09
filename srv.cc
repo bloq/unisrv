@@ -48,6 +48,8 @@ static struct argp_option options[] = {
 
 	{ "dump-config", 1004, NULL, 0,
 	  "Do not run server; output configuration instead" },
+	{ "dump-drivers", 1005, NULL, 0,
+	  "Do not run server; output list of Db drivers instead" },
 
 	{ "pid-file", 'p', "FILE", 0,
 	  "Pathname to which process PID is written (default: " DEFAULT_PID_FILE "; empty string to disable)" },
@@ -61,6 +63,7 @@ static std::string opt_configfn = "config-srv.json";
 static std::string opt_pid_file = DEFAULT_PID_FILE;
 static bool opt_daemon = false;
 static bool opt_dump_config = false;
+static bool opt_dump_drivers = false;
 static UniValue serverCfg;
 static evbase_t *evbase = NULL;
 
@@ -498,6 +501,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	case 1004:
 		opt_dump_config = true;
 		break;
+	case 1005:
+		opt_dump_drivers = true;
+		break;
 
 	case ARGP_KEY_END:
 		break;
@@ -614,6 +620,15 @@ static void shutdown_signal(int signo)
 	event_base_loopbreak(evbase);
 }
 
+static void dump_drivers()
+{
+	vector<string> driverNames;
+	list_db_drivers(driverNames);
+	for (auto it = driverNames.begin(); it != driverNames.end(); it++) {
+		printf("%s\n", (*it).c_str());
+	}
+}
+
 int main(int argc, char ** argv)
 {
 	// parse command line
@@ -640,8 +655,14 @@ int main(int argc, char ** argv)
 	evhtp_t  * htp    = evhtp_new(evbase, NULL);
 	evhtp_callback_t *cb = NULL;
 
-	if (!init_db_views() ||
-	    !init_endpoints())
+	if (!register_db_drivers())
+		return EXIT_FAILURE;
+	if (opt_dump_drivers) {
+		dump_drivers();
+		return EXIT_SUCCESS;
+	}
+
+	if (!init_db_views() || !init_endpoints())
 		return EXIT_FAILURE;
 
 	if (dbViews.empty()) {

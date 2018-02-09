@@ -1,5 +1,3 @@
-#ifndef __DRIVERS_GDBM_H__
-#define __DRIVERS_GDBM_H__
 
 #include <gdbm.h>
 #include "srv.h"
@@ -77,6 +75,20 @@ public:
 	}
 };
 
+class GdbmDriver : public DbDriver {
+public:
+	GdbmDriver() : DbDriver("gdbm") {}
+	~GdbmDriver() {}
+
+	View *newView(const std::string& name, const std::string& path) {
+		return new Unisrv::GdbmView(name, path);
+	}
+};
+
 } // namespace Unisrv
 
-#endif // __DRIVERS_GDBM_H__
+Unisrv::DbDriver *new_gdbm_driver()
+{
+	return new Unisrv::GdbmDriver();
+}
+
