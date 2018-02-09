@@ -28,17 +28,17 @@ using namespace std;
 #define PROGRAM_NAME "dbtool"
 
 static const char doc[] =
-PROGRAM_NAME " - rpc server db util";
+PROGRAM_NAME " - universal db tool";
 
 static struct argp_option options[] = {
-	{ "output", 'o', "FILE", 0,
-	  "Output rocksdb database root (default: " DEFAULT_DATASTORE_FN ")" },
+	{ "db", 1001, "FILE", 0,
+	  "Database pathname" },
 
-	{ "load-accounts", 1001, "FILE", 0,
-	  "JSON input file containing account data" },
+	{ "load-json", 1006, "JSON-FILE", 0,
+	  "Load JSON object into db" },
 
-	{ "load-auth", 1002, "FILE", 0,
-	  "JSON input file containing account data" },
+	{ "key-prefix", 1007, "PREFIX", 0,
+	  "Prepend this string to each key, during load operations" },
 
 	{ "keys", 1003, NULL, 0,
 	  "Dump all keys" },
@@ -55,9 +55,9 @@ static struct argp_option options[] = {
 static error_t parse_opt (int key, char *arg, struct argp_state *state);
 static const struct argp argp = { options, parse_opt, NULL, doc };
 
-static string opt_output_fn = DEFAULT_DATASTORE_FN;
-static string load_accounts_fn;
-static string load_auth_fn;
+static string opt_db_fn;
+static string opt_load_json_fn;
+static string opt_key_prefix;
 static bool opt_dump_keys = false;
 static bool opt_dump_db = false;
 static bool opt_clear_db = false;
@@ -66,16 +66,8 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 {
 	switch (key) {
 
-	case 'o':
-		opt_output_fn = arg;
-		break;
-
-	case 1001:	// --load-acounts=file
-		load_accounts_fn = arg;
-		break;
-
-	case 1002:	// --load-auth=file
-		load_auth_fn = arg;
+	case 1001:
+		opt_db_fn = arg;
 		break;
 
 	case 1003:	// --keys
@@ -88,6 +80,14 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 
 	case 1005:
 		opt_clear_db = true;
+		break;
+
+	case 1006:
+		opt_load_json_fn = arg;
+		break;
+
+	case 1007:
+		opt_key_prefix = arg;
 		break;
 
 	case ARGP_KEY_END:
@@ -159,22 +159,25 @@ int main(int argc, char ** argv)
 		return EXIT_FAILURE;
 	}
 
+	if (opt_db_fn.empty()) {
+		fprintf(stderr, "No database pathname specified\n");
+		return EXIT_FAILURE;
+	}
+
 	if (opt_clear_db)
-		DestroyDB(opt_output_fn, rocksdb::Options());
+		DestroyDB(opt_db_fn, rocksdb::Options());
 
 	rocksdb::DB* db;
 	rocksdb::Options options;
 	options.create_if_missing = true;
 	rocksdb::Status status =
-	  rocksdb::DB::Open(options, opt_output_fn, &db);
+	  rocksdb::DB::Open(options, opt_db_fn, &db);
 	assert(status.ok());
 
 	// input
 
-	if (!load_accounts_fn.empty())
-		dbPrefixedLoad(db, load_accounts_fn, "/acct/");
-	if (!load_auth_fn.empty())
-		dbPrefixedLoad(db, load_auth_fn, "/auth/");
+	if (!opt_load_json_fn.empty())
+		dbPrefixedLoad(db, opt_load_json_fn, opt_key_prefix);
 
 	// output
 

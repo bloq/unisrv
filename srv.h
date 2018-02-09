@@ -10,8 +10,6 @@
 #include <univalue.h>
 #include <openssl/sha.h>
 
-#define DEFAULT_DATASTORE_FN "srv.rocks"
-
 namespace Unisrv {
 
 class View {
